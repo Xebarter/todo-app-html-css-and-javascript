@@ -1,6 +1,6 @@
-// Import Firebase Firestore
-import { initializeApp } from "firebase/app";
-import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc } from "firebase/firestore";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
+import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
 
 // Firebase Configuration
 const firebaseConfig = {
@@ -10,118 +10,135 @@ const firebaseConfig = {
   storageBucket: "to-do-app-storage.appspot.com",
   messagingSenderId: "793106384640",
   appId: "1:793106384640:web:b9c8a23fbb309741f615e5",
-  measurementId: "G-E3SP92PE3L"
 };
 
-// Initialize Firebase and Firestore
+// Initialize Firebase
 const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
 const db = getFirestore(app);
 
 // DOM Elements
+const authContainer = document.getElementById("auth-container");
+const appContainer = document.getElementById("app-container");
+const emailInput = document.getElementById("email");
+const passwordInput = document.getElementById("password");
+const loginBtn = document.getElementById("login-btn");
+const signupBtn = document.getElementById("signup-btn");
+const logoutBtn = document.getElementById("logout-btn");
+const guestBtn = document.getElementById("guest-btn");
 const taskInput = document.getElementById("task-input");
 const addTaskBtn = document.getElementById("add-task-btn");
 const taskList = document.getElementById("task-list");
 
-// Load tasks from Firestore on page load
-document.addEventListener("DOMContentLoaded", async () => {
-  const tasksSnapshot = await getDocs(collection(db, "tasks"));
-  tasksSnapshot.forEach((doc) => {
-    const taskData = doc.data();
-    addTaskToDOM(doc.id, taskData.text, taskData.completed);
-  });
-});
+// State
+let isGuest = false; // Track if the user is in guest mode
 
-// Add a new task to Firestore
-addTaskBtn.addEventListener("click", async () => {
-  const taskText = taskInput.value.trim();
+// Show Tasks (Firebase or LocalStorage)
+function renderTask(taskId, taskText, isGuestTask = false) {
+  const taskItem = document.createElement("li");
+  taskItem.textContent = taskText;
+  const deleteBtn = document.createElement("button");
+  deleteBtn.textContent = "Delete";
+  deleteBtn.onclick = async () => {
+    if (isGuestTask) {
+      // Delete from localStorage
+      let tasks = JSON.parse(localStorage.getItem("tasks")) || [];
+      tasks = tasks.filter((task) => task.id !== taskId);
+      localStorage.setItem("tasks", JSON.stringify(tasks));
+    } else {
+      // Delete from Firebase
+      await deleteDoc(doc(db, "tasks", taskId));
+    }
+    taskItem.remove();
+  };
+  taskItem.appendChild(deleteBtn);
+  taskList.appendChild(taskItem);
+}
 
-  if (taskText === "") {
-    alert("Please enter a task!");
-    return;
-  }
+// Load Tasks (Guest Mode)
+function loadGuestTasks() {
+  const tasks = JSON.parse(localStorage.getItem("tasks")) || [];
+  tasks.forEach((task) => renderTask(task.id, task.text, true));
+}
 
-  const newTaskRef = await addDoc(collection(db, "tasks"), {
-    text: taskText,
-    completed: false
-  });
+// Add Task (Guest Mode)
+function addGuestTask(taskText) {
+  const taskId = Date.now().toString();
+  const task = { id: taskId, text: taskText };
+  let tasks = JSON.parse(localStorage.getItem("tasks")) || [];
+  tasks.push(task);
+  localStorage.setItem("tasks", JSON.stringify(tasks));
+  renderTask(taskId, taskText, true);
+}
 
-  addTaskToDOM(newTaskRef.id, taskText, false);
-  taskInput.value = "";
-});
+// Login User
+loginBtn.addEventListener("click", async () => {
+  const email = emailInput.value;
+  const password = passwordInput.value;
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+    authContainer.style.display = "none";
+    appContainer.style.display = "block";
+    logoutBtn.style.display = "block";
 
-// Function to add a task to the DOM
-function addTaskToDOM(taskId, taskText, completed = false) {
-  const li = document.createElement("li");
-  li.dataset.id = taskId; // Store the Firestore document ID
-  li.innerHTML = `
-    <span class="task-text ${completed ? "completed" : ""}">${taskText}</span>
-    <button class="edit-btn">Edit</button>
-    <button class="delete-btn">Delete</button>
-  `;
-
-  taskList.appendChild(li);
-
-  // Mark as completed
-  li.querySelector(".task-text").addEventListener("click", async () => {
-    const taskTextElement = li.querySelector(".task-text");
-    taskTextElement.classList.toggle("completed");
-    const isCompleted = taskTextElement.classList.contains("completed");
-
-    const taskRef = doc(db, "tasks", taskId);
-    await updateDoc(taskRef, { completed: isCompleted });
-  });
-
-  // Edit task
-  li.querySelector(".edit-btn").addEventListener("click", () => {
-    const taskTextElement = li.querySelector(".task-text");
-    const currentText = taskTextElement.textContent;
-
-    const editInput = document.createElement("input");
-    editInput.type = "text";
-    editInput.value = currentText;
-    editInput.classList.add("edit-input");
-
-    li.replaceChild(editInput, taskTextElement);
-
-    editInput.addEventListener("blur", async () => saveEdit(li, taskId, editInput));
-    editInput.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") saveEdit(li, taskId, editInput);
+    // Load tasks from Firebase
+    onSnapshot(collection(db, "tasks"), (snapshot) => {
+      taskList.innerHTML = ""; // Clear the list
+      snapshot.forEach((doc) => renderTask(doc.id, doc.data().text));
     });
-
-    editInput.focus();
-  });
-
-  // Delete task
-  li.querySelector(".delete-btn").addEventListener("click", async (e) => {
-    e.stopPropagation();
-    const taskRef = doc(db, "tasks", taskId);
-    await deleteDoc(taskRef);
-    li.remove();
-  });
-}
-
-// Save edited task
-async function saveEdit(li, taskId, editInput) {
-  const updatedText = editInput.value.trim();
-
-  if (updatedText === "") {
-    alert("Task cannot be empty!");
-    editInput.focus();
-    return;
+  } catch (error) {
+    alert(error.message);
   }
+});
 
-  const taskRef = doc(db, "tasks", taskId);
-  await updateDoc(taskRef, { text: updatedText });
+// Sign Up User
+signupBtn.addEventListener("click", async () => {
+  const email = emailInput.value;
+  const password = passwordInput.value;
+  try {
+    await createUserWithEmailAndPassword(auth, email, password);
+    alert("User signed up successfully. Please log in.");
+  } catch (error) {
+    alert(error.message);
+  }
+});
 
-  const taskTextElement = document.createElement("span");
-  taskTextElement.className = "task-text";
-  taskTextElement.textContent = updatedText;
+// Logout User
+logoutBtn.addEventListener("click", async () => {
+  try {
+    await signOut(auth);
+    authContainer.style.display = "block";
+    appContainer.style.display = "none";
+    logoutBtn.style.display = "none";
+  } catch (error) {
+    alert(error.message);
+  }
+});
 
-  li.replaceChild(taskTextElement, editInput);
+// Guest Access
+guestBtn.addEventListener("click", () => {
+  isGuest = true;
+  authContainer.style.display = "none";
+  appContainer.style.display = "block";
+  logoutBtn.style.display = "block";
 
-  taskTextElement.addEventListener("click", async () => {
-    const isCompleted = taskTextElement.classList.contains("completed");
-    taskTextElement.classList.toggle("completed");
-    await updateDoc(taskRef, { completed: isCompleted });
-  });
-}
+  // Load tasks from localStorage
+  loadGuestTasks();
+});
+
+// Add Task
+addTaskBtn.addEventListener("click", async () => {
+  const taskText = taskInput.value;
+  if (!taskText) return;
+
+  if (isGuest) {
+    addGuestTask(taskText);
+  } else {
+    try {
+      await addDoc(collection(db, "tasks"), { text: taskText });
+    } catch (error) {
+      alert(error.message);
+    }
+  }
+  taskInput.value = ""; // Clear input field
+});
