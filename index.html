@@ -1,23 +1,41 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Firebase Scripts -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js"></script>
 
+  <!-- Meta Tags -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>To-Do List App</title>
+
+  <!-- Page Title and Styles -->
+  <title>To-Do App with Firebase Authentication</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="app">
-    <h1>To-Do List</h1>
+  <!-- Authentication Container -->
+  <div id="auth-container">
+    <h2>Login to To-Do App</h2>
+    <input type="email" id="email" placeholder="Email" />
+    <input type="password" id="password" placeholder="Password" />
+    <button id="login-btn">Login</button>
+    <button id="signup-btn">Sign Up</button>
+    <p id="logout-btn" style="display: none; cursor: pointer;">Logout</p>
+  </div>
+
+  <!-- App Container -->
+  <div id="app-container" style="display: none;">
+    <h2>Your To-Do List</h2>
     <div class="input-container">
       <input type="text" id="task-input" placeholder="Enter a task" />
       <button id="add-task-btn">Add Task</button>
     </div>
     <ul id="task-list"></ul>
   </div>
-  <script src="script.js"></script>
+
+  <!-- Main Script -->
+  <script type="module" src="script.js"></script>
 </body>
 </html>
